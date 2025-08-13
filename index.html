@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Evaluatie Visualisatie – OpWest (Q1/Q2)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --blue:#212945; /* brand dark blue */
+      --light:#52E8E8; /* brand light blue */
+      --bg:#0f172a0d; /* subtle slate tint */
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:Archivo, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color:#0f172a; background:#fff;
+    }
+    header{
+      background:linear-gradient(135deg,var(--blue),#0f172a);
+      color:#fff; padding:28px 20px; position:sticky; top:0; z-index:5;
+      box-shadow:0 6px 18px rgba(0,0,0,.08);
+    }
+    header h1{margin:0 0 6px;font-size:clamp(20px,3vw,28px);font-weight:700;letter-spacing:.2px}
+    header p{margin:0;opacity:.9}
+
+    .wrapper{max-width:1200px;margin:24px auto;padding:0 16px 64px}
+
+    .panel{background:#fff;border:1px solid #e5e7eb;border-radius:18px; padding:18px; box-shadow:0 6px 18px rgba(2,6,23,.04);}
+    .grid{display:grid; gap:16px}
+    .grid-2{grid-template-columns:1.2fr .8fr}
+    @media (max-width: 980px){.grid-2{grid-template-columns:1fr}}
+
+    .dropzone{
+      border:2px dashed var(--blue); border-radius:18px; padding:28px; background:var(--bg); text-align:center; cursor:pointer;
+      transition:.25s ease; outline:none;
+    }
+    .dropzone:hover{background:#f8fafc}
+    .dropzone.dragover{background:#e6f8f8; box-shadow:0 0 0 4px #52e8e822}
+    .hint{font-size:.95rem;color:#334155}
+    .muted{opacity:.7}
+
+    .controls{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px}
+    .btn, .chip{
+      padding:9px 12px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; color:#0f172a; cursor:pointer; font-weight:600; font-size:.95rem;
+      transition:all .15s ease; user-select:none
+    }
+    .btn:hover, .chip:hover{transform:translateY(-1px); box-shadow:0 6px 14px rgba(2,6,23,.06)}
+    .btn.primary{background:var(--blue); color:#fff; border-color:transparent}
+    .btn.ghost{background:transparent}
+    .btn.outline{background:#fff}
+    .chip.active{background:var(--light); border-color:transparent}
+    .segmented{display:inline-flex; border:1px solid #e5e7eb; border-radius:999px; overflow:hidden}
+    .segmented button{border:0; border-right:1px solid #e5e7eb; padding:10px 14px; background:#fff; cursor:pointer; font-weight:600}
+    .segmented button:last-child{border-right:0}
+    .segmented button.active{background:var(--blue); color:#fff}
+
+    .row{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+    .row label{font-weight:600}
+
+    .notice{background:#ecfeff; border:1px dashed #67e8f9; padding:10px 12px; border-radius:12px; font-size:.95rem}
+
+    table{width:100%; border-collapse:collapse; font-size:.95rem}
+    th, td{border-bottom:1px solid #e5e7eb; padding:8px 10px; text-align:left}
+    thead th{position:sticky; top:0; background:#f8fafc; z-index:1}
+    .table-scroll{max-height:420px; overflow:auto; border:1px solid #e5e7eb; border-radius:12px}
+
+    .field{display:grid; gap:6px; margin:8px 0}
+    .field input, .field select, .field textarea{padding:10px 12px; border:1px solid #e5e7eb; border-radius:12px; font:inherit}
+    .field small{color:#475569}
+
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#f1f5f9;font-size:.85rem}
+
+    footer{margin-top:28px; color:#475569; font-size:.95rem}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Evaluatie Visualisatie – OpWest</h1>
+    <p class="muted">Sleep je Excel-bestanden (Q1 en Q2) naar de pagina of klik om te selecteren. Filter op impactgebied, wissel tussen kwartalen, voeg aanpassingen toe en download een bijgewerkt bestand.</p>
+  </header>
+
+  <div class="wrapper grid grid-2">
+    <section class="panel" aria-labelledby="upload">
+      <h2 id="upload" style="margin-top:4px">1) Bestanden laden</h2>
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Sleep bestanden hierheen of klik om te kiezen">
+        <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" multiple hidden>
+        <div style="font-size:1.05rem; font-weight:600; margin-bottom:6px">Sleep hier <span class="pill"><strong>Q1</strong></span> en <span class="pill"><strong>Q2</strong></span> Excel-bestanden</div>
+        <div class="hint">of <u>klik</u> om te kiezen. We ondersteunen .xlsx, .xls en .csv.</div>
+      </div>
+      <div style="margin-top:10px" id="loadedInfo" class="hint"></div>
+      <div id="impactDetect" class="notice" style="display:none; margin-top:10px"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="filters">
+      <h2 id="filters" style="margin-top:4px">2) Filters</h2>
+      <div class="row" style="margin-bottom:10px">
+        <label>Kwartaal:</label>
+        <div class="segmented" role="tablist" aria-label="Kwartaal keuze">
+          <button class="qbtn active" data-q="Both" role="tab" aria-selected="true">Beide</button>
+          <button class="qbtn" data-q="Q1" role="tab" aria-selected="false">Q1</button>
+          <button class="qbtn" data-q="Q2" role="tab" aria-selected="false">Q2</button>
+        </div>
+      </div>
+
+      <div class="row" style="align-items:flex-start">
+        <label style="margin-top:7px">Impactgebied:</label>
+        <div id="impactChips" class="controls" aria-live="polite"></div>
+      </div>
+      <div class="controls">
+        <button class="btn outline" id="selectAllImpacts">Alles selecteren</button>
+        <button class="btn ghost" id="clearImpacts">Leegmaken</button>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="viz">
+      <h2 id="viz" style="margin-top:4px">3) Overzicht</h2>
+      <canvas id="chart" height="240" aria-label="Samenvatting per impactgebied" role="img"></canvas>
+    </section>
+
+    <section class="panel" aria-labelledby="table">
+      <h2 id="table" style="margin-top:4px">4) Gegevens</h2>
+      <div class="row">
+        <div class="field" style="min-width:220px">
+          <label for="searchInput">Zoek in tabel</label>
+          <input id="searchInput" placeholder="Zoekterm..." />
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn" id="downloadCombined">Download bijgewerkt bestand (Q1 + Q2)</button>
+        <button class="btn ghost" id="downloadFilteredCsv" title="Alleen huidige filter">Download gefilterd CSV</button>
+      </div>
+      <div class="table-scroll" id="tableWrap"><table id="dataTable"></table></div>
+    </section>
+
+    <section class="panel" aria-labelledby="edit">
+      <h2 id="edit" style="margin-top:4px">5) Aanpassingen toevoegen</h2>
+      <p class="hint">Je aanpassingen worden lokaal toegevoegd aan de ingeladen data. Op een GitHub Pages-site kan niet automatisch teruggeschreven worden naar je repository. Gebruik de downloadknop en commit het bestand handmatig.</p>
+      <div class="row" style="margin-bottom:8px">
+        <label>Opslaan als:</label>
+        <div class="segmented">
+          <button class="save-q active" data-q="auto">Huidige filter</button>
+          <button class="save-q" data-q="Q1">Q1</button>
+          <button class="save-q" data-q="Q2">Q2</button>
+          <button class="save-q" data-q="Both">Beide</button>
+        </div>
+      </div>
+      <div id="dynamicForm" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); margin-bottom:8px"></div>
+      <div class="row">
+        <button class="btn primary" id="addRowBtn">+ Voeg record toe</button>
+        <span id="addRowMsg" class="hint"></span>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="help">
+      <h2 id="help" style="margin-top:4px">Hulp & Tips</h2>
+      <ul style="margin:0 0 0 18px; line-height:1.5">
+        <li>Bestandsnamen met <strong>Q1</strong> of <strong>Q2</strong> worden automatisch herkend. Anders vragen we je om het kwartaal te kiezen.</li>
+        <li>De kolom <strong>Impact</strong> of <strong>Impactgebied</strong> wordt automatisch gekozen. Als dat niet lukt, kies je zelf de juiste kolom.</li>
+        <li>Vermijd het dubbel uploaden van dezelfde kwartalen: we voegen data samen.</li>
+        <li>Je kunt altijd het <em>bijgewerkte</em> bestand downloaden met Q1 en Q2 als aparte tabbladen.</li>
+      </ul>
+      <footer>© <span id="year"></span> – Gemaakt voor GitHub Pages. Stijl: #212945 / #52E8E8</footer>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      rows: [], // alle records (objecten) + helpers
+      headers: new Set(),
+      impactColumn: null,
+      selectedImpacts: new Set(),
+      selectedQuarter: 'Both',
+      search: '',
+      saveTarget: 'auto', // auto | Q1 | Q2 | Both
+      chart: null
+    };
+
+    const PREFERRED_IMPACT_HEADERS = ['Impact', 'Impactgebied'];
+
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const loadedInfo = document.getElementById('loadedInfo');
+    const impactDetect = document.getElementById('impactDetect');
+    const impactChips = document.getElementById('impactChips');
+    const selectAllBtn = document.getElementById('selectAllImpacts');
+    const clearImpactsBtn = document.getElementById('clearImpacts');
+    const qBtns = document.querySelectorAll('.qbtn');
+    const searchInput = document.getElementById('searchInput');
+    const tableEl = document.getElementById('dataTable');
+    const tableWrap = document.getElementById('tableWrap');
+    const chartCanvas = document.getElementById('chart');
+    const addRowBtn = document.getElementById('addRowBtn');
+    const addRowMsg = document.getElementById('addRowMsg');
+    const dynamicForm = document.getElementById('dynamicForm');
+    const downloadCombined = document.getElementById('downloadCombined');
+    const downloadFilteredCsv = document.getElementById('downloadFilteredCsv');
+    const saveQBtns = document.querySelectorAll('.save-q');
+
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // --- Dropzone interactions ---
+    const openPicker = () => fileInput.click();
+    dropzone.addEventListener('click', openPicker);
+    dropzone.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openPicker(); }});
+    dropzone.addEventListener('dragover', (e)=>{ e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', ()=> dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', (e)=>{
+      e.preventDefault(); dropzone.classList.remove('dragover'); handleFiles(e.dataTransfer.files);
+    });
+    fileInput.addEventListener('change', (e)=> handleFiles(e.target.files));
+
+    function inferQuarterFromName(name){
+      const n = name.toLowerCase();
+      if(n.includes('q1')) return 'Q1';
+      if(n.includes('q2')) return 'Q2';
+      return null;
+    }
+
+    async function handleFiles(fileList){
+      const files = [...fileList];
+      if(!files.length) return;
+      for(const file of files){
+        const quarterGuess = inferQuarterFromName(file.name);
+        let quarter = quarterGuess;
+        if(!quarter){
+          quarter = await askQuarter(file.name);
+          if(!quarter) continue; // skipped
+        }
+        const buf = await file.arrayBuffer();
+        let rows = [];
+        const wb = XLSX.read(buf, {type:'array'});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+        // Track headers union (consider every row to catch sparse columns)
+        for(const r of rows){
+          for(const key of Object.keys(r)){
+            if(key !== '__quarter') state.headers.add(key);
+          }
+        }
+        // Add quarter flag
+        for(const r of rows){
+          r.__quarter = quarter;
+        }
+        state.rows.push(...rows);
+      }
+      loadedInfo.innerHTML = `Ingeladen records: <strong>${state.rows.length}</strong>`;
+      maybeDetectImpactColumn();
+      buildDynamicForm();
+      renderAll();
+    }
+
+    function askQuarter(filename){
+      return new Promise((resolve)=>{
+        const el = document.createElement('div');
+        el.className = 'notice';
+        el.style.marginTop = '10px';
+        el.innerHTML = `
+          <div style="display:flex; align-items:center; gap:8px; justify-content:space-between; flex-wrap:wrap">
+            <div><strong>Welk kwartaal hoort <u>${filename}</u> bij?</strong></div>
+            <div class="segmented">
+              <button data-v="Q1">Q1</button>
+              <button data-v="Q2">Q2</button>
+              <button data-v="skip">Overslaan</button>
+            </div>
+          </div>`;
+        loadedInfo.appendChild(el);
+        el.querySelectorAll('button').forEach(b=> b.addEventListener('click',()=>{
+          const v = b.getAttribute('data-v');
+          el.remove();
+          if(v==='skip') resolve(null); else resolve(v);
+        }));
+      });
+    }
+
+    function maybeDetectImpactColumn(){
+      if(state.impactColumn) return;
+      const headers = [...state.headers];
+      // 1) Prefer exact matches first
+      for(const pref of PREFERRED_IMPACT_HEADERS){
+        if(headers.includes(pref)){ state.impactColumn = pref; break; }
+      }
+      // 2) Otherwise, fuzzy guess
+      if(!state.impactColumn){
+        let guess = headers.find(h => /(^|\s)impact(gebied|\b)/i.test(h)) || headers.find(h => /impact/i.test(h));
+        if(guess) state.impactColumn = guess;
+      }
+      if(state.impactColumn){
+        buildImpactChips();
+        return;
+      }
+      // 3) Ask user
+      impactDetect.style.display = 'block';
+      const sel = document.createElement('select');
+      sel.innerHTML = headers.map(h=>`<option>${escapeHtml(h)}</option>`).join('');
+      const btn = document.createElement('button'); btn.className='btn'; btn.textContent='Gebruik deze kolom';
+      impactDetect.innerHTML = '<strong>Kies de kolomnaam die het impactgebied bevat:</strong><br />';
+      impactDetect.appendChild(sel); impactDetect.appendChild(document.createTextNode(' ')); impactDetect.appendChild(btn);
+      btn.addEventListener('click', ()=>{ state.impactColumn = sel.value; impactDetect.style.display='none'; buildImpactChips(); renderAll(); buildDynamicForm(); });
+    }
+
+    function buildImpactChips(){
+      impactChips.innerHTML='';
+      const unique = new Set();
+      for(const r of state.rows){
+        const v = r[state.impactColumn];
+        if(v!==undefined && v!==null && String(v).trim()!=='') unique.add(String(v));
+      }
+      const values = [...unique].sort((a,b)=> a.localeCompare(b));
+      if(values.length===0){ impactChips.innerHTML = '<span class="hint">Geen impactwaarden gevonden.</span>'; return; }
+      // default: all selected
+      if(state.selectedImpacts.size===0){ values.forEach(v=> state.selectedImpacts.add(v)); }
+      for(const v of values){
+        const b = document.createElement('button');
+        b.className = 'chip' + (state.selectedImpacts.has(v)?' active':'');
+        b.textContent = v;
+        b.setAttribute('data-v', v);
+        b.addEventListener('click', ()=>{
+          if(state.selectedImpacts.has(v)) state.selectedImpacts.delete(v); else state.selectedImpacts.add(v);
+          b.classList.toggle('active');
+          renderAll();
+        });
+        impactChips.appendChild(b);
+      }
+      // Rebuild form select options for impact column
+      buildDynamicForm();
+    }
+
+    selectAllBtn.addEventListener('click', ()=>{
+      const chips = impactChips.querySelectorAll('.chip');
+      chips.forEach(c=> state.selectedImpacts.add(c.getAttribute('data-v')));
+      chips.forEach(c=> c.classList.add('active'));
+      renderAll();
+    });
+    clearImpactsBtn.addEventListener('click', ()=>{
+      state.selectedImpacts.clear();
+      impactChips.querySelectorAll('.chip').forEach(c=> c.classList.remove('active'));
+      renderAll();
+    });
+
+    qBtns.forEach(b=> b.addEventListener('click', ()=>{
+      qBtns.forEach(x=> x.classList.remove('active'));
+      b.classList.add('active');
+      state.selectedQuarter = b.getAttribute('data-q');
+      renderAll();
+    }));
+
+    searchInput.addEventListener('input', ()=>{ state.search = searchInput.value.toLowerCase(); renderTable(); });
+
+    function getFilteredRows(){
+      const q = state.selectedQuarter;
+      return state.rows.filter(r => {
+        const byQ = (q==='Both') ? true : (r.__quarter===q);
+        const byImpact = state.impactColumn ? (state.selectedImpacts.size===0 || state.selectedImpacts.has(String(r[state.impactColumn]))) : true;
+        const bySearch = state.search ? Object.values(r).some(v => String(v).toLowerCase().includes(state.search)) : true;
+        return byQ && byImpact && bySearch;
+      });
+    }
+
+    function renderAll(){
+      renderChart();
+      renderTable();
+    }
+
+    function renderChart(){
+      if(!state.impactColumn){ return; }
+      const rows = getFilteredRows();
+      const counts = {};
+      for(const r of rows){
+        const k = String(r[state.impactColumn] ?? '—');
+        counts[k] = (counts[k]||0)+1;
+      }
+      const labels = Object.keys(counts).sort((a,b)=> a.localeCompare(b));
+      const data = labels.map(l=> counts[l]);
+      if(state.chart){ state.chart.destroy(); }
+      state.chart = new Chart(chartCanvas, {
+        type:'bar',
+        data:{ labels, datasets:[{ label:'Aantal records', data }] },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ display:false }, tooltip:{ enabled:true } },
+          scales:{ x:{ ticks:{ autoSkip:false }}, y:{ beginAtZero:true, precision:0 } }
+        }
+      });
+    }
+
+    function renderTable(){
+      const rows = getFilteredRows();
+      const headers = [...state.headers];
+      // Build thead
+      let html = '<thead><tr>' + headers.map(h=>`<th>${escapeHtml(h)}</th>`).join('') + '<th>Kwartaal</th></tr></thead>';
+      html += '<tbody>' + rows.map(r=>{
+        const tds = headers.map(h=> `<td>${escapeHtml(String(r[h] ?? ''))}</td>`).join('');
+        return `<tr>${tds}<td>${r.__quarter}</td></tr>`;
+      }).join('') + '</tbody>';
+      tableEl.innerHTML = html;
+      tableWrap.scrollTop = 0;
+    }
+
+    function buildDynamicForm(){
+      dynamicForm.innerHTML='';
+      const headers = [...state.headers];
+      if(headers.length===0){ dynamicForm.innerHTML = '<div class="hint">Laad eerst een bestand.</div>'; return; }
+      for(const h of headers){
+        const wrap = document.createElement('div'); wrap.className='field';
+        const id = 'f_'+slug(h);
+        const label = document.createElement('label'); label.setAttribute('for', id); label.textContent = h;
+        let input;
+        if(state.impactColumn && h===state.impactColumn){
+          input = document.createElement('select'); input.id = id;
+        } else {
+          input = document.createElement('input'); input.id = id; input.placeholder = h;
+        }
+        wrap.appendChild(label); wrap.appendChild(input);
+        dynamicForm.appendChild(wrap);
+      }
+      // If impact select exists, populate options from chips
+      if(state.impactColumn){
+        const sel = document.getElementById('f_'+slug(state.impactColumn));
+        if(sel && sel.tagName==='SELECT'){
+          const values = [...document.querySelectorAll('#impactChips .chip')].map(c=> c.getAttribute('data-v'));
+          sel.innerHTML = '<option value="">—</option>' + values.map(v=>`<option>${escapeHtml(v)}</option>`).join('');
+        }
+      }
+    }
+
+    saveQBtns.forEach(b=> b.addEventListener('click', ()=>{
+      saveQBtns.forEach(x=> x.classList.remove('active'));
+      b.classList.add('active');
+      state.saveTarget = b.getAttribute('data-q');
+    }));
+
+    addRowBtn.addEventListener('click', ()=>{
+      const headers = [...state.headers];
+      if(headers.length===0) return;
+      const base = {};
+      for(const h of headers){
+        const id = 'f_'+slug(h);
+        const el = document.getElementById(id);
+        base[h] = el ? el.value : '';
+      }
+      const targets = resolveSaveTargets();
+      for(const q of targets){
+        const row = {...base, __quarter:q};
+        state.rows.push(row);
+      }
+      addRowMsg.textContent = `Toegevoegd: ${targets.length} record(s).`;
+      setTimeout(()=> addRowMsg.textContent = '', 2500);
+      renderAll();
+    });
+
+    function resolveSaveTargets(){
+      if(state.saveTarget==='Q1') return ['Q1'];
+      if(state.saveTarget==='Q2') return ['Q2'];
+      if(state.saveTarget==='Both') return ['Q1','Q2'];
+      // auto => huidige filter
+      if(state.selectedQuarter==='Both') return ['Q1','Q2'];
+      return [state.selectedQuarter];
+    }
+
+    downloadCombined.addEventListener('click', ()=>{
+      if(state.rows.length===0) return;
+      const wb = XLSX.utils.book_new();
+      const headers = [...state.headers];
+      const q1 = state.rows.filter(r=> r.__quarter==='Q1').map(r=> stripHelpers(r, headers));
+      const q2 = state.rows.filter(r=> r.__quarter==='Q2').map(r=> stripHelpers(r, headers));
+      const ws1 = XLSX.utils.json_to_sheet(q1, {header:headers});
+      const ws2 = XLSX.utils.json_to_sheet(q2, {header:headers});
+      XLSX.utils.book_append_sheet(wb, ws1, 'Q1');
+      XLSX.utils.book_append_sheet(wb, ws2, 'Q2');
+      XLSX.writeFile(wb, 'Evaluatie_OpWest_bijgewerkt.xlsx');
+    });
+
+    downloadFilteredCsv.addEventListener('click', ()=>{
+      const rows = getFilteredRows();
+      if(rows.length===0) return;
+      const headers = [...state.headers];
+      const clean = rows.map(r=> stripHelpers(r, headers));
+      const ws = XLSX.utils.json_to_sheet(clean, {header:headers});
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      const blob = new Blob([csv], {type:'text/csv'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'filtered.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    function stripHelpers(r, headers){
+      const o = {}; for(const h of headers){ o[h] = r[h] ?? ''; } return o;
+    }
+
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    }
+    function slug(s){ return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_'); }
+  </script>
+</body>
+</html>
